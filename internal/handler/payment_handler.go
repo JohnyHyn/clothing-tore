@@ -6,15 +6,34 @@ import (
 	"net/http"
 )
 
+type CreatePaymentRequest struct {
+	OrderID  int64  `json:"order_id" example:"123"`
+	Provider string `json:"provider" example:"momo"`
+}
+
+type WebhookRequest struct {
+	OrderID       int64  `json:"order_id"`
+	TransactionID string `json:"transaction_id"`
+	Status        string `json:"status" example:"success"` // success, failed
+}
+
 type PaymentHandler struct {
 	PaymentService *service.PaymentService
 }
 
+// CreatePayment godoc
+// @Summary      Create payment URL
+// @Description  Create a payment URL for an order
+// @Tags         payments
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        request body CreatePaymentRequest true "Payment Request"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {string}  string "Invalid request"
+// @Router       /payments/create [post]
 func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		OrderID  int64  `json:"order_id"`
-		Provider string `json:"provider"`
-	}
+	var req CreatePaymentRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -54,6 +73,15 @@ func (h *PaymentHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Webhook received"))
 }
 
+// GetHistory godoc
+// @Summary      Get payment history
+// @Description  Get payment history
+// @Tags         payments
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {string}  string "Not implemented yet"
+// @Router       /payments/history [get]
 func (h *PaymentHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	// Basic implementation just to avoid unused method error if I were to add it later?
 	// Actually user didn't ask for history endpoint yet, but good for debugging.

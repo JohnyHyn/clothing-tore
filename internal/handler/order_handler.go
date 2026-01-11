@@ -9,10 +9,27 @@ import (
 	"strings"
 )
 
+type RefundRequest struct {
+	Reason string `json:"reason" example:"Product defective"`
+}
+
 type OrderHandler struct {
 	OrderService *service.OrderService
 }
 
+// CreateOrder godoc
+// @Summary      Create a new order
+// @Description  Create a new order with items
+// @Tags         orders
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        order body model.Order true "Order Data"
+// @Success      201  {object}  model.Order
+// @Failure      400  {string}  string "Invalid request"
+// @Failure      401  {string}  string "Unauthorized"
+// @Failure      500  {string}  string "Internal Server Error"
+// @Router       /orders [post]
 func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	var order model.Order
 
@@ -36,6 +53,20 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(order)
 }
+
+// CancelOrder godoc
+// @Summary      Cancel an order
+// @Description  Cancel an order by ID
+// @Tags         orders
+// @Accept       json
+// @Produce      plain
+// @Security     BearerAuth
+// @Param        id   path      int  true  "Order ID"
+// @Success      200  {string}  string "Order cancelled successfully"
+// @Failure      400  {string}  string "Invalid ID"
+// @Failure      401  {string}  string "Unauthorized"
+// @Failure      500  {string}  string "Internal Server Error"
+// @Router       /orders/{id}/cancel [put]
 func (h *OrderHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/orders/")
 	idStr = strings.TrimSuffix(idStr, "/cancel")
@@ -54,6 +85,20 @@ func (h *OrderHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 
 	w.Write([]byte("Order cancelled successfully"))
 }
+
+// PayOrder godoc
+// @Summary      Pay an order
+// @Description  Mark an order as paid
+// @Tags         orders
+// @Accept       json
+// @Produce      plain
+// @Security     BearerAuth
+// @Param        id   path      int  true  "Order ID"
+// @Success      200  {string}  string "Order paid successfully"
+// @Failure      400  {string}  string "Invalid ID"
+// @Failure      401  {string}  string "Unauthorized"
+// @Failure      500  {string}  string "Internal Server Error"
+// @Router       /orders/{id}/pay [put]
 func (h *OrderHandler) PayOrder(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/orders/")
 	idStr = strings.TrimSuffix(idStr, "/pay")
@@ -97,6 +142,21 @@ func (h *OrderHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
 		"data": order,
 	})
 }
+
+// RefundOrder godoc
+// @Summary      Refund an order
+// @Description  Refund an order with a reason
+// @Tags         orders
+// @Accept       json
+// @Produce      plain
+// @Security     BearerAuth
+// @Param        id   path      int  true  "Order ID"
+// @Param        request body RefundRequest true "Refund Reason"
+// @Success      200  {string}  string "Order refunded successfully"
+// @Failure      400  {string}  string "Invalid ID or request"
+// @Failure      401  {string}  string "Unauthorized"
+// @Failure      500  {string}  string "Internal Server Error"
+// @Router       /orders/{id}/refund [put]
 func (h *OrderHandler) RefundOrder(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/orders/")
 	idStr = strings.TrimSuffix(idStr, "/refund")
@@ -107,9 +167,7 @@ func (h *OrderHandler) RefundOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Reason string `json:"reason"`
-	}
+	var req RefundRequest
 	json.NewDecoder(r.Body).Decode(&req)
 
 	err = h.OrderService.RefundOrder(id, req.Reason)

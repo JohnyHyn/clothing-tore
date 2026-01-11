@@ -1,0 +1,847 @@
+basePath: /
+definitions:
+  handler.CreatePaymentRequest:
+    properties:
+      order_id:
+        example: 123
+        type: integer
+      provider:
+        example: momo
+        type: string
+    type: object
+  handler.LoginRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: password123
+        type: string
+    type: object
+  handler.LoginResponse:
+    properties:
+      token:
+        type: string
+    type: object
+  handler.RefundRequest:
+    properties:
+      reason:
+        example: Product defective
+        type: string
+    type: object
+  handler.UpdateShippingStatusRequest:
+    properties:
+      location:
+        example: Warehouse A
+        type: string
+      note:
+        example: Picked up
+        type: string
+      shipping_id:
+        type: integer
+      status:
+        example: shipping
+        type: string
+    type: object
+  handler.UpdateTrackingCodeRequest:
+    properties:
+      tracking_code:
+        example: GHN123456
+        type: string
+    type: object
+  model.Order:
+    properties:
+      created_at:
+        type: string
+      customer_name:
+        type: string
+      customer_phone:
+        type: string
+      id:
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/model.OrderItem'
+        type: array
+      status:
+        type: string
+      total_price:
+        type: number
+    type: object
+  model.OrderItem:
+    properties:
+      price:
+        type: number
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      quantity:
+        type: integer
+    type: object
+  model.Product:
+    properties:
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+      status:
+        type: string
+      stock:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  model.Shipping:
+    properties:
+      address:
+        description: Địa chỉ giao hàng
+        type: string
+      city:
+        description: Thành phố
+        type: string
+      created_at:
+        type: string
+      delivered_at:
+        description: Ngày giao thực tế
+        type: string
+      district:
+        description: Quận/Huyện
+        type: string
+      estimated_date:
+        description: Ngày giao dự kiến
+        type: string
+      fee:
+        description: Phí ship
+        type: number
+      id:
+        type: integer
+      method:
+        description: '"standard", "express", "same_day"'
+        type: string
+      note:
+        description: Ghi chú
+        type: string
+      order_id:
+        type: integer
+      provider:
+        description: '"ghn", "ghtk", "viettel_post"'
+        type: string
+      receiver_name:
+        description: Tên người nhận
+        type: string
+      receiver_phone:
+        description: SĐT người nhận
+        type: string
+      status:
+        description: '"pending", "picked_up", "in_transit", "delivered", "failed"'
+        type: string
+      tracking_code:
+        description: Mã vận đơn
+        type: string
+      updated_at:
+        type: string
+      ward:
+        description: Phường/Xã
+        type: string
+    type: object
+  model.ShippingHistory:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      location:
+        description: Vị trí hiện tại
+        type: string
+      note:
+        type: string
+      shipping_id:
+        type: integer
+      status:
+        type: string
+    type: object
+  model.Voucher:
+    properties:
+      code:
+        description: Mã voucher, e.g., "SUMMER2026"
+        type: string
+      created_at:
+        type: string
+      description:
+        description: Mô tả voucher
+        type: string
+      end_date:
+        description: Ngày kết thúc
+        type: string
+      id:
+        type: integer
+      is_active:
+        description: Còn hoạt động không
+        type: boolean
+      max_discount:
+        description: Giảm tối đa (cho percentage)
+        type: number
+      min_order:
+        description: Đơn hàng tối thiểu
+        type: number
+      start_date:
+        description: Ngày bắt đầu
+        type: string
+      type:
+        description: '"percentage" hoặc "fixed"'
+        type: string
+      usage_limit:
+        description: Số lần sử dụng tối đa
+        type: integer
+      used_count:
+        description: Đã dùng bao nhiêu lần
+        type: integer
+      value:
+        description: Giá trị giảm (% hoặc số tiền)
+        type: number
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: This is a sample server for Clothing Store.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Clothing Store API
+  version: "1.0"
+paths:
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Login with email and password to get JWT token
+      parameters:
+      - description: Login Credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.LoginResponse'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      summary: Login user
+      tags:
+      - auth
+  /orders:
+    post:
+      consumes:
+      - application/json
+      description: Create a new order with items
+      parameters:
+      - description: Order Data
+        in: body
+        name: order
+        required: true
+        schema:
+          $ref: '#/definitions/model.Order'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Order'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Create a new order
+      tags:
+      - orders
+  /orders/{id}/cancel:
+    put:
+      consumes:
+      - application/json
+      description: Cancel an order by ID
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Order cancelled successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid ID
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Cancel an order
+      tags:
+      - orders
+  /orders/{id}/pay:
+    put:
+      consumes:
+      - application/json
+      description: Mark an order as paid
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Order paid successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid ID
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Pay an order
+      tags:
+      - orders
+  /orders/{id}/refund:
+    put:
+      consumes:
+      - application/json
+      description: Refund an order with a reason
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Refund Reason
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RefundRequest'
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Order refunded successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid ID or request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Refund an order
+      tags:
+      - orders
+  /payments/create:
+    post:
+      consumes:
+      - application/json
+      description: Create a payment URL for an order
+      parameters:
+      - description: Payment Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Create payment URL
+      tags:
+      - payments
+  /payments/history:
+    get:
+      consumes:
+      - application/json
+      description: Get payment history
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Not implemented yet
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get payment history
+      tags:
+      - payments
+  /products:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of products with pagination
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Product'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: List products
+      tags:
+      - products
+    post:
+      consumes:
+      - application/json
+      description: Create a new product (Admin only)
+      parameters:
+      - description: Product Data
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/model.Product'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Product'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Create a new product
+      tags:
+      - products
+  /products/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a product by ID (Admin only)
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Product deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid ID
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Delete a product
+      tags:
+      - products
+  /shippings:
+    get:
+      consumes:
+      - application/json
+      description: Get shipping information by order ID
+      parameters:
+      - description: Order ID
+        in: query
+        name: order_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Shipping'
+        "400":
+          description: Invalid order ID
+          schema:
+            type: string
+        "404":
+          description: Shipping not found
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get shipping by order ID
+      tags:
+      - shippings
+    post:
+      consumes:
+      - application/json
+      description: Create shipping information for an order
+      parameters:
+      - description: Shipping Data
+        in: body
+        name: shipping
+        required: true
+        schema:
+          $ref: '#/definitions/model.Shipping'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Shipping'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Create shipping info
+      tags:
+      - shippings
+  /shippings/{id}/tracking:
+    put:
+      consumes:
+      - application/json
+      description: Update tracking code for a shipping
+      parameters:
+      - description: Shipping ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Tracking Code
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateTrackingCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tracking code updated successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Update tracking code
+      tags:
+      - shippings
+  /shippings/history:
+    get:
+      consumes:
+      - application/json
+      description: Get history of a shipping
+      parameters:
+      - description: Shipping ID
+        in: query
+        name: shipping_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.ShippingHistory'
+            type: array
+        "400":
+          description: Invalid shipping ID
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get shipping history
+      tags:
+      - shippings
+  /shippings/status:
+    put:
+      consumes:
+      - application/json
+      description: Update status of a shipping (Admin/System)
+      parameters:
+      - description: Status Update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateShippingStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Update shipping status
+      tags:
+      - shippings
+  /shippings/track:
+    get:
+      consumes:
+      - application/json
+      description: Track shipping status by tracking code
+      parameters:
+      - description: Tracking Code
+        in: query
+        name: tracking_code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Tracking code is required
+          schema:
+            type: string
+        "404":
+          description: Tracking code not found
+          schema:
+            type: string
+      summary: Track shipping
+      tags:
+      - shippings
+  /vouchers:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of vouchers with pagination
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Show only active vouchers
+        in: query
+        name: active_only
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Voucher'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: List vouchers
+      tags:
+      - vouchers
+  /vouchers/{code}:
+    get:
+      consumes:
+      - application/json
+      description: Get voucher details by code
+      parameters:
+      - description: Voucher Code
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Voucher'
+        "404":
+          description: Voucher not found
+          schema:
+            type: string
+      summary: Get voucher by code
+      tags:
+      - vouchers
+  /vouchers/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a voucher by ID (Admin only)
+      parameters:
+      - description: Voucher ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Voucher deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid ID
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Delete a voucher
+      tags:
+      - vouchers
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

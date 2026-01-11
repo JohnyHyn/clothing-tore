@@ -74,7 +74,18 @@ func (h *VoucherHandler) ValidateVoucher(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// ListVouchers lấy danh sách vouchers
+// ListVouchers godoc
+// @Summary      List vouchers
+// @Description  Get a list of vouchers with pagination
+// @Tags         vouchers
+// @Accept       json
+// @Produce      json
+// @Param        page         query     int     false  "Page number" default(1)
+// @Param        limit        query     int     false  "Items per page" default(10)
+// @Param        active_only  query     boolean false  "Show only active vouchers"
+// @Success      200  {array}   model.Voucher
+// @Failure      500  {string}  string "Internal Server Error"
+// @Router       /vouchers [get]
 func (h *VoucherHandler) ListVouchers(w http.ResponseWriter, r *http.Request) {
 	pageStr := r.URL.Query().Get("page")
 	limitStr := r.URL.Query().Get("limit")
@@ -122,7 +133,16 @@ func (h *VoucherHandler) ListVouchers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetVoucher lấy thông tin voucher theo code
+// GetVoucher godoc
+// @Summary      Get voucher by code
+// @Description  Get voucher details by code
+// @Tags         vouchers
+// @Accept       json
+// @Produce      json
+// @Param        code path string true "Voucher Code"
+// @Success      200  {object}  model.Voucher
+// @Failure      404  {string}  string "Voucher not found"
+// @Router       /vouchers/{code} [get]
 func (h *VoucherHandler) GetVoucher(w http.ResponseWriter, r *http.Request) {
 	code := strings.TrimPrefix(r.URL.Path, "/vouchers/")
 
@@ -160,7 +180,18 @@ func (h *VoucherHandler) UpdateVoucher(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DeleteVoucher xóa voucher (admin only)
+// DeleteVoucher godoc
+// @Summary      Delete a voucher
+// @Description  Delete a voucher by ID (Admin only)
+// @Tags         vouchers
+// @Accept       json
+// @Produce      plain
+// @Security     BearerAuth
+// @Param        id   path      int  true  "Voucher ID"
+// @Success      200  {string}  string "Voucher deleted successfully"
+// @Failure      400  {string}  string "Invalid ID"
+// @Failure      500  {string}  string "Internal Server Error"
+// @Router       /vouchers/{id} [delete]
 func (h *VoucherHandler) DeleteVoucher(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/vouchers/")
 	id, err := strconv.ParseInt(idStr, 10, 64)
