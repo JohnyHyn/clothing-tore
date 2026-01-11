@@ -1,0 +1,5 @@
+$Env:DB_USER="clothing_app"
+$Env:DB_PASSWORD="StrongPassword@123"
+$Env:DB_HOST="127.0.0.1"
+$Env:DB_PORT="3306"
+$Env:DB_NAME="clothing_store"
