@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 // @title           Clothing Store API
@@ -32,6 +34,7 @@ import (
 
 func main() {
 	database := db.Connect()
+	http.Handle("/swagger/", httpSwagger.WrapHandler)
 
 	productService := &service.ProductService{DB: database}
 	productHandler := &handler.ProductHandler{
