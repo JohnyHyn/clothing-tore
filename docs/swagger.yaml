@@ -9,6 +9,12 @@ definitions:
         example: momo
         type: string
     type: object
+  handler.ForgotPasswordRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+    type: object
   handler.LoginRequest:
     properties:
       email:
@@ -27,6 +33,30 @@ definitions:
     properties:
       reason:
         example: Product defective
+        type: string
+    type: object
+  handler.RegisterRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: password123
+        type: string
+      username:
+        example: johndoe
+        type: string
+    type: object
+  handler.ResetPasswordRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      new_password:
+        example: newpassword123
+        type: string
+      token:
+        example: RESET123
         type: string
     type: object
   handler.UpdateShippingStatusRequest:
@@ -80,27 +110,6 @@ definitions:
         type: integer
     type: object
   model.Product:
-    properties:
-      category:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      id:
-        type: integer
-      image_url:
-        type: string
-      name:
-        type: string
-      price:
-        type: number
-      status:
-        type: string
-      stock:
-        type: integer
-      updated_at:
-        type: string
     type: object
   model.Shipping:
     properties:
@@ -225,6 +234,34 @@ info:
   title: Clothing Store API
   version: "1.0"
 paths:
+  /forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Request a password reset token via email
+      parameters:
+      - description: Email address
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message, token (for demo)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+      summary: Request password reset
+      tags:
+      - auth
   /login:
     post:
       consumes:
@@ -551,6 +588,62 @@ paths:
       summary: Delete a product
       tags:
       - products
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user
+      parameters:
+      - description: Registration Info
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User registered successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Register user
+      tags:
+      - auth
+  /reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Reset password using the provided token
+      parameters:
+      - description: Reset details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid token or request
+          schema:
+            type: string
+      summary: Reset password
+      tags:
+      - auth
   /shippings:
     get:
       consumes:
