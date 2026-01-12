@@ -4,14 +4,24 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
-	// Connect to DB directly for seeding
 	dsn := "clothing_app:StrongPassword@123@tcp(127.0.0.1:3306)/clothing_store"
+	if os.Getenv("DB_NAME") != "" {
+		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
+			os.Getenv("DB_USER"),
+			os.Getenv("DB_PASSWORD"),
+			os.Getenv("DB_HOST"),
+			os.Getenv("DB_PORT"),
+			os.Getenv("DB_NAME"),
+		)
+	}
+
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
@@ -24,23 +34,25 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Check columns
-	rows, err := db.Query("SELECT * FROM users LIMIT 0")
-	if err != nil {
-		log.Fatal(err)
-	}
-	cols, _ := rows.Columns()
-	fmt.Println("Columns:", cols)
-
-	_, err = db.Exec(`
-		INSERT INTO users (email, password, role) 
-		VALUES (?, ?, ?)
-		ON DUPLICATE KEY UPDATE password = ?
-	`, "admin@shop.com", string(hashedPassword), "admin", string(hashedPassword))
-
-	if err != nil {
-		log.Fatal("Failed to seed user:", err)
+	users := []struct {
+		Email string
+		Role  string
+	}{
+		{"admin@shop.com", "admin"},
+		{"staff@shop.com", "staff"},
 	}
 
-	fmt.Println("User admin@shop.com / 123456 created/updated successfully!")
+	for _, u := range users {
+		_, err = db.Exec(`
+			INSERT INTO users (email, password, role) 
+			VALUES (?, ?, ?)
+			ON DUPLICATE KEY UPDATE password = ?, role = ?
+		`, u.Email, string(hashedPassword), u.Role, string(hashedPassword), u.Role)
+
+		if err != nil {
+			log.Printf("Failed to seed user %s: %v", u.Email, err)
+		} else {
+			fmt.Printf("User %s created/updated successfully!\n", u.Email)
+		}
+	}
 }

@@ -43,7 +43,8 @@ func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 
 	err = h.ProductService.CreateProduct(&product)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Printf("Error creating product: %v\n", err)
+		http.Error(w, fmt.Sprintf("Internal Server Error: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -83,6 +84,18 @@ func (h *ProductHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(products)
 }
+
+// GetProductByID godoc
+// @Summary      Get product by ID
+// @Description  Get a single product by its ID
+// @Tags         products
+// @Accept       json
+// @Produce      json
+// @Param        id   path      int  true  "Product ID"
+// @Success      200  {object}  model.Product
+// @Failure      400  {string}  string "Invalid ID"
+// @Failure      404  {string}  string "Product not found"
+// @Router       /products/{id} [get]
 func (h *ProductHandler) GetProductByID(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/products/")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -100,6 +113,21 @@ func (h *ProductHandler) GetProductByID(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(product)
 }
+
+// UpdateProduct godoc
+// @Summary      Update a product
+// @Description  Update a product (Admin or Staff only)
+// @Tags         products
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id      path      int            true  "Product ID"
+// @Param        product body      model.Product   true  "Updated Product Data"
+// @Success      200     {string}  string         "Product updated successfully"
+// @Failure      400     {string}  string         "Invalid request"
+// @Failure      401     {string}  string         "Unauthorized"
+// @Failure      500     {string}  string         "Internal Server Error"
+// @Router       /products/{id} [put]
 func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/products/")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -117,7 +145,8 @@ func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 
 	err = h.ProductService.UpdateProduct(id, &product)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Printf("Error updating product %d: %v\n", id, err)
+		http.Error(w, fmt.Sprintf("Internal Server Error: %v", err), http.StatusInternalServerError)
 		return
 	}
 

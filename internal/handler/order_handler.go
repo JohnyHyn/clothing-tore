@@ -38,6 +38,9 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID := r.Context().Value("user_id").(float64)
+	order.UserID = int64(userID)
+
 	if len(order.Items) == 0 {
 		http.Error(w, "Order items required", http.StatusBadRequest)
 		return
@@ -86,6 +89,37 @@ func (h *OrderHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Order cancelled successfully"))
 }
 
+// DeleteOrder godoc
+// @Summary      Delete an order
+// @Description  Delete an order by ID (only pending or cancelled)
+// @Tags         orders
+// @Accept       json
+// @Produce      plain
+// @Security     BearerAuth
+// @Param        id   path      int  true  "Order ID"
+// @Success      200  {string}  string "Order deleted successfully"
+// @Failure      400  {string}  string "Invalid ID"
+// @Failure      401  {string}  string "Unauthorized"
+// @Failure      500  {string}  string "Internal Server Error"
+// @Router       /orders/{id} [delete]
+func (h *OrderHandler) DeleteOrder(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/orders/")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid order ID", http.StatusBadRequest)
+		return
+	}
+
+	err = h.OrderService.DeleteOrder(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Order deleted successfully"))
+}
+
 // PayOrder godoc
 // @Summary      Pay an order
 // @Description  Mark an order as paid
@@ -117,6 +151,30 @@ func (h *OrderHandler) PayOrder(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Order paid successfully"))
+}
+
+// ApproveOrder godoc
+// @Summary      Approve an order
+// @Description  Change order status from 'chờ xử lý' to 'đã xử lý' (Staff/Admin only)
+// @Tags         orders
+// @Accept       json
+// @Produce      plain
+// @Security     BearerAuth
+// @Param        id   path      int  true  "Order ID"
+// @Success      200  {string}  string "Order approved successfully"
+// @Failure      400  {string}  string "Invalid ID or status"
+// @Router       /orders/{id}/approve [put]
+func (h *OrderHandler) ApproveOrder(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/orders/")
+	idStr = strings.TrimSuffix(idStr, "/approve")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+
+	err := h.OrderService.ApproveOrder(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte("Order approved successfully"))
 }
 
 func (h *OrderHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
@@ -228,6 +286,59 @@ func (h *OrderHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
 			"status":    status,
 			"date_from": dateFrom,
 			"date_to":   dateTo,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// ListMyOrders handles GET requests to list the current user's orders
+// @Summary      List my orders
+// @Description  Get a paginated list of orders for the currently logged-in user
+// @Tags         orders
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        page   query     int  false  "Page number" default(1)
+// @Param        limit  query     int  false  "Items per page" default(10)
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {string}  string "Unauthorized"
+// @Failure      500  {string}  string "Internal Server Error"
+// @Router       /my/orders [get]
+func (h *OrderHandler) ListMyOrders(w http.ResponseWriter, r *http.Request) {
+	userIDVal := r.Context().Value("user_id")
+	if userIDVal == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID := userIDVal.(float64)
+
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+
+	page := 1
+	limit := 10
+
+	if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		limit = l
+	}
+
+	orders, total, err := h.OrderService.ListUserOrders(int64(userID), page, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"data": orders,
+		"pagination": map[string]interface{}{
+			"page":  page,
+			"limit": limit,
+			"total": total,
 		},
 	}
 

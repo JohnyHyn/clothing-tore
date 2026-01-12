@@ -34,32 +34,58 @@ import (
 
 func main() {
 	database := db.Connect()
-	http.Handle("/swagger/", httpSwagger.WrapHandler)
+
+	// CORS Middleware
+	corsMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/swagger/", httpSwagger.WrapHandler)
 
 	productService := &service.ProductService{DB: database}
 	productHandler := &handler.ProductHandler{
 		ProductService: productService,
 	}
-	http.HandleFunc("/products", func(w http.ResponseWriter, r *http.Request) {
+
+	// Helpers for RBAC
+	adminStaff := func(next http.HandlerFunc) http.HandlerFunc {
+		return middleware.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			middleware.RoleMiddleware([]string{"admin", "staff"}, next)(w, r)
+		})
+	}
+	authUser := middleware.AuthMiddleware
+
+	mux.HandleFunc("/products", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			productHandler.GetProducts(w, r)
 		case http.MethodPost:
-			// Protect CreateProduct
-			middleware.AuthMiddleware(productHandler.CreateProduct)(w, r)
+			adminStaff(productHandler.CreateProduct)(w, r)
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	http.HandleFunc("/products/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/products/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			productHandler.GetProductByID(w, r)
 		case http.MethodPut:
-			middleware.AuthMiddleware(productHandler.UpdateProduct)(w, r)
+			adminStaff(productHandler.UpdateProduct)(w, r)
 		case http.MethodDelete:
-			middleware.AuthMiddleware(productHandler.DeleteProduct)(w, r)
+			adminStaff(productHandler.DeleteProduct)(w, r)
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
@@ -70,7 +96,7 @@ func main() {
 	authService := &service.AuthService{DB: database}
 	authHandler := &handler.AuthHandler{AuthService: authService}
 
-	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			authHandler.Login(w, r)
 			return
@@ -78,7 +104,7 @@ func main() {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
-	http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			authHandler.Register(w, r)
 			return
@@ -86,7 +112,7 @@ func main() {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
-	http.HandleFunc("/forgot-password", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/forgot-password", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			authHandler.ForgotPassword(w, r)
 			return
@@ -94,12 +120,37 @@ func main() {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
-	http.HandleFunc("/reset-password", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/reset-password", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			authHandler.ResetPassword(w, r)
 			return
 		}
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	})
+
+	cartService := &service.CartService{DB: database}
+	cartHandler := &handler.CartHandler{CartService: cartService}
+
+	mux.HandleFunc("/cart", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			authUser(cartHandler.GetCart)(w, r)
+		case http.MethodPost:
+			authUser(cartHandler.AddToCart)(w, r)
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/cart/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			authUser(cartHandler.UpdateQuantity)(w, r)
+		case http.MethodDelete:
+			authUser(cartHandler.RemoveItem)(w, r)
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
 	})
 
 	paymentService := &service.PaymentService{DB: database}
@@ -111,15 +162,15 @@ func main() {
 	shippingService := &service.ShippingService{DB: database}
 	shippingHandler := &handler.ShippingHandler{ShippingService: shippingService}
 
-	http.HandleFunc("/payments/create", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/payments/create", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			middleware.AuthMiddleware(paymentHandler.CreatePayment)(w, r)
+			authUser(paymentHandler.CreatePayment)(w, r)
 			return
 		}
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
-	http.HandleFunc("/payments/webhook", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/payments/webhook", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			paymentHandler.Webhook(w, r)
 			return
@@ -128,29 +179,27 @@ func main() {
 	})
 
 	// Payment history endpoint
-	http.HandleFunc("/payments/history", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/payments/history", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			middleware.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				paymentHandler.GetHistory(w, r)
-			}))(w, r)
+			adminStaff(paymentHandler.GetHistory)(w, r)
 			return
 		}
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
 	// VOUCHER ROUTES
-	http.HandleFunc("/vouchers", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/vouchers", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			voucherHandler.ListVouchers(w, r)
 		case http.MethodPost:
-			middleware.AuthMiddleware(voucherHandler.CreateVoucher)(w, r)
+			adminStaff(voucherHandler.CreateVoucher)(w, r)
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	http.HandleFunc("/vouchers/validate", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/vouchers/validate", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			voucherHandler.ValidateVoucher(w, r)
 			return
@@ -158,32 +207,32 @@ func main() {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
-	http.HandleFunc("/vouchers/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/vouchers/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			voucherHandler.GetVoucher(w, r)
 		} else if r.Method == http.MethodPut {
-			middleware.AuthMiddleware(voucherHandler.UpdateVoucher)(w, r)
+			adminStaff(voucherHandler.UpdateVoucher)(w, r)
 		} else if r.Method == http.MethodDelete {
-			middleware.AuthMiddleware(voucherHandler.DeleteVoucher)(w, r)
+			adminStaff(voucherHandler.DeleteVoucher)(w, r)
 		} else {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
 	// SHIPPING ROUTES
-	http.HandleFunc("/shippings", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/shippings", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			// Get by order ID
-			middleware.AuthMiddleware(shippingHandler.GetShippingByOrder)(w, r)
+			authUser(shippingHandler.GetShippingByOrder)(w, r)
 		case http.MethodPost:
-			middleware.AuthMiddleware(shippingHandler.CreateShipping)(w, r)
+			authUser(shippingHandler.CreateShipping)(w, r)
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	http.HandleFunc("/shippings/track", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/shippings/track", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			shippingHandler.TrackShipping(w, r)
 			return
@@ -191,23 +240,23 @@ func main() {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
-	http.HandleFunc("/shippings/status", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/shippings/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
-			middleware.AuthMiddleware(shippingHandler.UpdateShippingStatus)(w, r)
+			adminStaff(shippingHandler.UpdateShippingStatus)(w, r)
 			return
 		}
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
-	http.HandleFunc("/shippings/history", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/shippings/history", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			middleware.AuthMiddleware(shippingHandler.GetShippingHistory)(w, r)
+			adminStaff(shippingHandler.GetShippingHistory)(w, r)
 			return
 		}
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
-	http.HandleFunc("/shippings/calculate-fee", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/shippings/calculate-fee", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			shippingHandler.CalculateShippingFee(w, r)
 			return
@@ -215,54 +264,73 @@ func main() {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
-	http.HandleFunc("/shippings/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/shippings/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/tracking") && r.Method == http.MethodPut {
-			middleware.AuthMiddleware(shippingHandler.UpdateTrackingCode)(w, r)
+			adminStaff(shippingHandler.UpdateTrackingCode)(w, r)
 			return
 		}
 		http.NotFound(w, r)
 	})
 
-	http.HandleFunc("/orders", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/my/orders", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			authUser(orderHandler.ListMyOrders)(w, r)
+			return
+		}
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	})
+
+	mux.HandleFunc("/orders", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			// Protect ListOrders with JWT
-			middleware.AuthMiddleware(orderHandler.ListOrders)(w, r)
+			adminStaff(orderHandler.ListOrders)(w, r)
 		case http.MethodPost:
-			// Protect CreateOrder with JWT
-			middleware.AuthMiddleware(orderHandler.CreateOrder)(w, r)
+			authUser(orderHandler.CreateOrder)(w, r)
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	http.HandleFunc("/orders/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/orders/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/cancel") && r.Method == http.MethodPut {
-			// Protect CancelOrder with JWT
-			middleware.AuthMiddleware(orderHandler.CancelOrder)(w, r)
+			authUser(orderHandler.CancelOrder)(w, r)
 			return
 		}
 
 		if strings.HasSuffix(r.URL.Path, "/pay") && r.Method == http.MethodPut {
-			// Protect PayOrder with JWT
-			middleware.AuthMiddleware(orderHandler.PayOrder)(w, r)
+			authUser(orderHandler.PayOrder)(w, r)
 			return
 		}
 
 		if r.Method == http.MethodGet {
-			// Protect GetOrder with JWT
-			middleware.AuthMiddleware(orderHandler.GetOrder)(w, r)
+			authUser(orderHandler.GetOrder)(w, r)
+			return
+		}
+		if r.Method == http.MethodDelete {
+			authUser(orderHandler.DeleteOrder)(w, r)
+			return
+		}
+		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/approve") {
+			adminStaff(orderHandler.ApproveOrder)(w, r)
 			return
 		}
 		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/refund") {
-			// Protect RefundOrder with JWT
-			middleware.AuthMiddleware(orderHandler.RefundOrder)(w, r)
+			adminStaff(orderHandler.RefundOrder)(w, r)
 			return
 		}
 
 		http.NotFound(w, r)
 	})
 
+	mux.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
+		// You can add middleware here if needed
+		handler.UploadHandler(w, r)
+	})
+
+	// Serve static files from uploads directory
+	fs := http.FileServer(http.Dir("./uploads"))
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
+
 	log.Println("Server running at :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8080", corsMiddleware(mux)))
 }

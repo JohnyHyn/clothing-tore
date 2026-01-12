@@ -1,5 +1,12 @@
 basePath: /
 definitions:
+  handler.AddToCartRequest:
+    properties:
+      product_id:
+        type: integer
+      quantity:
+        type: integer
+    type: object
   handler.CreatePaymentRequest:
     properties:
       order_id:
@@ -79,8 +86,34 @@ definitions:
         example: GHN123456
         type: string
     type: object
+  handler.UploadResponse:
+    properties:
+      url:
+        type: string
+    type: object
+  model.CartItem:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      price:
+        type: number
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      quantity:
+        type: integer
+      user_id:
+        type: integer
+    type: object
   model.Order:
     properties:
+      address:
+        type: string
       created_at:
         type: string
       customer_name:
@@ -93,10 +126,16 @@ definitions:
         items:
           $ref: '#/definitions/model.OrderItem'
         type: array
+      payment_method:
+        type: string
+      shipping_method:
+        type: string
       status:
         type: string
       total_price:
         type: number
+      user_id:
+        type: integer
     type: object
   model.OrderItem:
     properties:
@@ -110,6 +149,27 @@ definitions:
         type: integer
     type: object
   model.Product:
+    properties:
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+      status:
+        type: string
+      stock:
+        type: integer
+      updated_at:
+        type: string
     type: object
   model.Shipping:
     properties:
@@ -234,6 +294,127 @@ info:
   title: Clothing Store API
   version: "1.0"
 paths:
+  /cart:
+    get:
+      consumes:
+      - application/json
+      description: Get all items in the current user's cart
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.CartItem'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get user's cart
+      tags:
+      - cart
+    post:
+      consumes:
+      - application/json
+      description: Add a product to the user's cart or increase quantity
+      parameters:
+      - description: Product and Quantity
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.AddToCartRequest'
+      produces:
+      - text/plain
+      responses:
+        "201":
+          description: Added to cart
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Add item to cart
+      tags:
+      - cart
+  /cart/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove a single item from the cart by its ID
+      parameters:
+      - description: Cart Item ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Item removed
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Remove item from cart
+      tags:
+      - cart
+    put:
+      consumes:
+      - application/json
+      description: Change the quantity of an item in the cart
+      parameters:
+      - description: Cart Item ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: New quantity
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Quantity updated
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Update cart item quantity
+      tags:
+      - cart
   /forgot-password:
     post:
       consumes:
@@ -292,6 +473,43 @@ paths:
       summary: Login user
       tags:
       - auth
+  /my/orders:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of orders for the currently logged-in user
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: List my orders
+      tags:
+      - orders
   /orders:
     post:
       consumes:
@@ -326,6 +544,69 @@ paths:
       security:
       - BearerAuth: []
       summary: Create a new order
+      tags:
+      - orders
+  /orders/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an order by ID (only pending or cancelled)
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Order deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid ID
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Delete an order
+      tags:
+      - orders
+  /orders/{id}/approve:
+    put:
+      consumes:
+      - application/json
+      description: Change order status from 'chờ xử lý' to 'đã xử lý' (Staff/Admin
+        only)
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Order approved successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid ID or status
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Approve an order
       tags:
       - orders
   /orders/{id}/cancel:
@@ -588,6 +869,74 @@ paths:
       summary: Delete a product
       tags:
       - products
+    get:
+      consumes:
+      - application/json
+      description: Get a single product by its ID
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Product'
+        "400":
+          description: Invalid ID
+          schema:
+            type: string
+        "404":
+          description: Product not found
+          schema:
+            type: string
+      summary: Get product by ID
+      tags:
+      - products
+    put:
+      consumes:
+      - application/json
+      description: Update a product (Admin or Staff only)
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated Product Data
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/model.Product'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Product updated successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Update a product
+      tags:
+      - products
   /register:
     post:
       consumes:
@@ -840,6 +1189,35 @@ paths:
       summary: Track shipping
       tags:
       - shippings
+  /upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload an image file and get the URL
+      parameters:
+      - description: Image file to upload
+        in: formData
+        name: image
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.UploadResponse'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Upload an image
+      tags:
+      - upload
   /vouchers:
     get:
       consumes:

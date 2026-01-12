@@ -4,6 +4,7 @@ import (
 	"clothing-store/internal/model"
 	"clothing-store/internal/service"
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -51,15 +52,21 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Login decode error: %v", err)
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
+	log.Printf("Login attempt for email: %s", req.Email)
+
 	token, err := h.AuthService.Login(req.Email, req.Password)
 	if err != nil {
+		log.Printf("Login failed for %s: %v", req.Email, err)
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
+
+	log.Printf("Login successful for %s", req.Email)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": token})

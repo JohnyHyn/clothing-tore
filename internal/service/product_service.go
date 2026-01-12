@@ -42,7 +42,7 @@ func (s *ProductService) GetProducts(page, limit int) ([]model.Product, error) {
 	offset := (page - 1) * limit
 
 	query := `
-		SELECT id, name, price, stock, category, image_url
+		SELECT id, name, price, stock, category, image_url, status
 		FROM products
 		WHERE status = 'active'
 		ORDER BY created_at DESC
@@ -66,6 +66,7 @@ func (s *ProductService) GetProducts(page, limit int) ([]model.Product, error) {
 			&p.Stock,
 			&p.Category,
 			&p.ImageURL,
+			&p.Status,
 		)
 		if err != nil {
 			return nil, err
@@ -77,9 +78,9 @@ func (s *ProductService) GetProducts(page, limit int) ([]model.Product, error) {
 }
 func (s *ProductService) GetProductByID(id int64) (*model.Product, error) {
 	query := `
-		SELECT id, name, description, price, stock, category, image_url
+		SELECT id, name, description, price, stock, category, image_url, status
 		FROM products
-		WHERE id = ? AND status = 'active'
+		WHERE id = ?
 	`
 
 	var p model.Product
@@ -91,6 +92,7 @@ func (s *ProductService) GetProductByID(id int64) (*model.Product, error) {
 		&p.Stock,
 		&p.Category,
 		&p.ImageURL,
+		&p.Status,
 	)
 
 	if err != nil {
@@ -102,8 +104,8 @@ func (s *ProductService) GetProductByID(id int64) (*model.Product, error) {
 func (s *ProductService) UpdateProduct(id int64, p *model.Product) error {
 	query := `
 		UPDATE products
-		SET name = ?, description = ?, price = ?, stock = ?, category = ?, image_url = ?
-		WHERE id = ? AND status = 'active'
+		SET name = ?, description = ?, price = ?, stock = ?, category = ?, image_url = ?, status = ?
+		WHERE id = ?
 	`
 
 	_, err := s.DB.Exec(
@@ -114,6 +116,7 @@ func (s *ProductService) UpdateProduct(id int64, p *model.Product) error {
 		p.Stock,
 		p.Category,
 		p.ImageURL,
+		p.Status,
 		id,
 	)
 	return err

@@ -55,10 +55,14 @@ func (s *OrderService) CreateOrder(order *model.Order) error {
 	}
 
 	result, err := tx.Exec(
-		"INSERT INTO orders (customer_name, customer_phone, total_price) VALUES (?, ?, ?)",
+		"INSERT INTO orders (user_id, customer_name, customer_phone, address, total_price, payment_method, shipping_method) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		order.UserID,
 		order.CustomerName,
 		order.CustomerPhone,
+		order.Address,
 		total,
+		order.PaymentMethod,
+		order.ShippingMethod,
 	)
 	if err != nil {
 		tx.Rollback()
@@ -91,67 +95,105 @@ func (s *OrderService) CancelOrder(orderID int64) error {
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
 
 	var status string
-	err = tx.QueryRow(
-		"SELECT status FROM orders WHERE id = ?",
-		orderID,
-	).Scan(&status)
-
+	err = tx.QueryRow("SELECT status FROM orders WHERE id = ?", orderID).Scan(&status)
 	if err != nil {
-		tx.Rollback()
 		return errors.New("order not found")
 	}
 
 	if status != "pending" {
-		tx.Rollback()
 		return errors.New("only pending orders can be cancelled")
 	}
 
-	rows, err := tx.Query(
-		"SELECT product_id, quantity FROM order_items WHERE order_id = ?",
-		orderID,
-	)
+	rows, err := tx.Query("SELECT product_id, quantity FROM order_items WHERE order_id = ?", orderID)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
+	defer rows.Close()
 
-	type orderItem struct {
-		ProductID int64
-		Quantity  int
+	type item struct {
+		pID int64
+		qty int
 	}
-	var items []orderItem
-
+	var items []item
 	for rows.Next() {
-		var item orderItem
-		if err := rows.Scan(&item.ProductID, &item.Quantity); err != nil {
-			rows.Close()
-			tx.Rollback()
-			return err
-		}
-		items = append(items, item)
+		var i item
+		rows.Scan(&i.pID, &i.qty)
+		items = append(items, i)
 	}
 	rows.Close()
 
-	for _, item := range items {
-		_, err = tx.Exec(
-			"UPDATE products SET stock = stock + ? WHERE id = ?",
-			item.Quantity,
-			item.ProductID,
-		)
+	for _, i := range items {
+		_, err = tx.Exec("UPDATE products SET stock = stock + ? WHERE id = ?", i.qty, i.pID)
 		if err != nil {
-			tx.Rollback()
 			return err
 		}
 	}
 
-	_, err = tx.Exec(
-		"UPDATE orders SET status = 'cancelled' WHERE id = ?",
-		orderID,
-	)
+	_, err = tx.Exec("UPDATE orders SET status = 'cancelled' WHERE id = ?", orderID)
 	if err != nil {
-		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (s *OrderService) DeleteOrder(orderID int64) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var status string
+	err = tx.QueryRow("SELECT status FROM orders WHERE id = ? FOR UPDATE", orderID).Scan(&status)
+	if err != nil {
+		return err
+	}
+
+	if status != "pending" && status != "cancelled" {
+		return errors.New("cannot delete order that is already paid or processed")
+	}
+
+	// Restore stock if it was pending (already subtracted)
+	if status == "pending" {
+		rows, err := tx.Query("SELECT product_id, quantity FROM order_items WHERE order_id = ?", orderID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		type item struct {
+			pID int64
+			qty int
+		}
+		var items []item
+		for rows.Next() {
+			var i item
+			rows.Scan(&i.pID, &i.qty)
+			items = append(items, i)
+		}
+		rows.Close()
+
+		for _, i := range items {
+			_, err = tx.Exec("UPDATE products SET stock = stock + ? WHERE id = ?", i.qty, i.pID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Delete items first
+	_, err = tx.Exec("DELETE FROM order_items WHERE order_id = ?", orderID)
+	if err != nil {
+		return err
+	}
+
+	// Delete order
+	_, err = tx.Exec("DELETE FROM orders WHERE id = ?", orderID)
+	if err != nil {
 		return err
 	}
 
@@ -181,6 +223,31 @@ func (s *OrderService) PayOrder(orderID int64) error {
 		"UPDATE orders SET status = 'paid' WHERE id = ?",
 		orderID,
 	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (s *OrderService) ApproveOrder(orderID int64) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var status string
+	err = tx.QueryRow("SELECT status FROM orders WHERE id = ? FOR UPDATE", orderID).Scan(&status)
+	if err != nil {
+		return err
+	}
+
+	if status != "chờ xử lý" {
+		return errors.New("chỉ có thể duyệt đơn hàng đang chờ xử lý")
+	}
+
+	_, err = tx.Exec("UPDATE orders SET status = 'đã xử lý' WHERE id = ?", orderID)
 	if err != nil {
 		return err
 	}
@@ -218,14 +285,18 @@ func (s *OrderService) GetOrderByID(orderID int64) (*model.Order, error) {
 	order := &model.Order{}
 
 	err := s.DB.QueryRow(`
-		SELECT id, customer_name, customer_phone, total_price, status
+		SELECT id, user_id, customer_name, customer_phone, address, total_price, payment_method, shipping_method, status
 		FROM orders
 		WHERE id = ?
 	`, orderID).Scan(
 		&order.ID,
+		&order.UserID,
 		&order.CustomerName,
 		&order.CustomerPhone,
+		&order.Address,
 		&order.TotalPrice,
+		&order.PaymentMethod,
+		&order.ShippingMethod,
 		&order.Status,
 	)
 
@@ -387,7 +458,7 @@ func (s *OrderService) ListOrders(page, limit int, status, dateFrom, dateTo stri
 
 	// Get paginated orders
 	query := `
-		SELECT id, customer_name, customer_phone, total_price, status, created_at
+		SELECT id, user_id, customer_name, customer_phone, address, total_price, payment_method, shipping_method, status, created_at
 		FROM orders
 		` + whereClause + `
 		ORDER BY created_at DESC
@@ -408,9 +479,13 @@ func (s *OrderService) ListOrders(page, limit int, status, dateFrom, dateTo stri
 		var order model.Order
 		err := rows.Scan(
 			&order.ID,
+			&order.UserID,
 			&order.CustomerName,
 			&order.CustomerPhone,
+			&order.Address,
 			&order.TotalPrice,
+			&order.PaymentMethod,
+			&order.ShippingMethod,
 			&order.Status,
 			&order.CreatedAt,
 		)
@@ -422,6 +497,52 @@ func (s *OrderService) ListOrders(page, limit int, status, dateFrom, dateTo stri
 
 	if err = rows.Err(); err != nil {
 		return nil, 0, err
+	}
+
+	return orders, total, nil
+}
+
+func (s *OrderService) ListUserOrders(userID int64, page, limit int) ([]model.Order, int, error) {
+	offset := (page - 1) * limit
+
+	var total int
+	err := s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE user_id = ?", userID).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	query := `
+		SELECT id, user_id, customer_name, customer_phone, address, total_price, payment_method, shipping_method, status, created_at
+		FROM orders
+		WHERE user_id = ?
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`
+	rows, err := s.DB.Query(query, userID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var orders []model.Order
+	for rows.Next() {
+		var order model.Order
+		err := rows.Scan(
+			&order.ID,
+			&order.UserID,
+			&order.CustomerName,
+			&order.CustomerPhone,
+			&order.Address,
+			&order.TotalPrice,
+			&order.PaymentMethod,
+			&order.ShippingMethod,
+			&order.Status,
+			&order.CreatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		orders = append(orders, order)
 	}
 
 	return orders, total, nil

@@ -48,3 +48,28 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r.WithContext(ctx))
 	}
 }
+
+func RoleMiddleware(requiredRoles []string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userRole, ok := r.Context().Value("role").(string)
+		if !ok {
+			http.Error(w, "unauthorized: role not found", http.StatusForbidden)
+			return
+		}
+
+		authorized := false
+		for _, role := range requiredRoles {
+			if userRole == role {
+				authorized = true
+				break
+			}
+		}
+
+		if !authorized {
+			http.Error(w, "forbidden: insufficient permissions", http.StatusForbidden)
+			return
+		}
+
+		next(w, r)
+	}
+}
